@@ -6,7 +6,7 @@ class SyncedRequestHandler {
         this.timeout = options.timeout + 1000;
     }
 
-    request(method, url, auth, body, file, _route, short) {
+		request (method, url, auth, body, file, _route, short) {
         return new Promise((resolve, reject) => {
             let stackCapture = new Error().stack;
 

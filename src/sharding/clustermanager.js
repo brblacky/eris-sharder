@@ -6,6 +6,7 @@ const EventEmitter = require("events");
 const Eris = require("eris");
 const Queue = require("../utils/queue.js");
 const pkg = require("../../package.json")
+const BucketQueue = require("bucket-queue");
 
 /**
  * 
@@ -23,6 +24,18 @@ class ClusterManager extends EventEmitter {
      */
     constructor(token, mainFile, options) {
         super();
+
+				this.bucket = BucketQueue({
+					calls: 55,
+					perInterval: 500,
+					// maxConcurrent: 80 
+				}).start()
+
+				if (this.isMaster()) {
+					this.bucketLogger = setInterval(() => {
+						console.log(this.bucket.getState());
+					}, 5000);
+				}
 
         this.shardCount = options.shards || 'auto';
         this.firstShardID = options.firstShardID || 0;
@@ -324,7 +337,14 @@ class ClusterManager extends EventEmitter {
                         if (file && file.file) file.file = Buffer.from(file.file, 'base64');
 
                         try {
-                            response = await this.eris.requestHandler.request(method, url, auth, body, file, _route, short);
+
+                            if (url?.includes("/interactions/")) {
+                                response = await this.eris.requestHandler.request(method, url, auth, body, file, _route, short);
+                            } else {
+                                response = await this.bucket.add(() => {
+                                    return this.eris.requestHandler.request(method, url, auth, body, file, _route, short)
+                                })
+                            }
                         } catch (err) {
                             error = {
                                 code: err.code,
@@ -497,6 +517,8 @@ class ClusterManager extends EventEmitter {
 
     async calculateShards() {
         let shards = this.shardCount;
+
+				if (this.shardCount !== 0) return Promise.resolve(this.shardCount);
 
         let result = await this.eris.getBotGateway();
         shards = result.shards;
